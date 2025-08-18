@@ -1,0 +1,30 @@
+# GNOME Monitor Switcher - Git Ignore File
+
+# Backup configurations (user-specific)
+configs/gdctl-backup-*.txt
+
+# Temporary files
+*.tmp
+*.log
+
+# User-specific configuration files
+*-local.*
+user-config.py
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Editor files  
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Keep configs directory structure but ignore backups
+!configs/.gitkeep

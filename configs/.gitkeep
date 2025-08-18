@@ -1,0 +1,3 @@
+# Keep this directory in git
+# The configs/ directory is used for automatic configuration backups
+# Individual backup files are ignored via .gitignore
