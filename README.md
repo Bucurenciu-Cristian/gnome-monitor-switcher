@@ -13,7 +13,20 @@ A powerful instant monitor switching solution for GNOME/Wayland systems. Switch 
 
 ## 🚀 Quick Start
 
-### Essential Commands
+### Interactive CLI (New!)
+```bash
+# Launch interactive monitor switcher
+~/bin/monitors/monitor-switch.py
+# or add alias: mswitch='~/bin/monitors/monitor-switch.py'
+
+# Features:
+# - Dynamic monitor detection (works with any setup)
+# - Interactive refresh rate selection
+# - Real-time current mode display
+# - Safety confirmations and backups
+```
+
+### Quick Aliases (Original)
 ```bash
 m0          # Switch to ASUS monitor (3440x1440@100Hz)
 m1          # Switch to Iiyama monitor (3440x1440@180Hz) 
@@ -210,12 +223,27 @@ gdctl set $(cat ~/bin/monitors/configs/gdctl-backup-LATEST.txt)
 - **Hotel**: `m0` or `m1` for external monitor when available
 - **Client Site**: Safe operation with unknown monitor setups
 
+## 🛠️ Two Tools Available
+
+### 1. Interactive CLI (`monitor-switch.py`)
+- **Best for**: Any hardware setup, exploring options
+- **Features**: Dynamic detection, interactive menus, works with any monitors
+- **Usage**: `~/bin/monitors/monitor-switch.py`
+
+### 2. Quick Aliases (`gdctl-instant.py`) 
+- **Best for**: Daily workflow, muscle memory, this specific hardware setup
+- **Features**: One-command switching, optimized for ASUS/Iiyama/LG setup
+- **Usage**: `m0`, `m1`, `m3` commands
+
+Both tools create automatic backups and use the same gdctl backend.
+
 ## 🔄 Version History
 
 - **v1.0**: Initial release with basic monitor switching
 - **v1.1**: Added triple monitor layout and portrait orientation
 - **v1.2**: Enhanced safety validation and environment detection
 - **v1.3**: Added comprehensive documentation and GitHub repository
+- **v1.4**: Added interactive CLI program for universal hardware support
 
 ## 📄 License
 
