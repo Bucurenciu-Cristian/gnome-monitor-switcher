@@ -57,6 +57,46 @@ class Monitor:
         
         return grouped
 
+    def get_top_modes(self, limit: int = 10) -> List[MonitorMode]:
+        """Get the top best modes filtered by resolution quality and refresh rates"""
+        MIN_PIXELS = 1280 * 720  # Minimum HD resolution
+        
+        # Group modes by resolution
+        modes_by_resolution = self.get_modes_by_resolution()
+        
+        # Calculate pixel count for each resolution and filter
+        resolution_scores = []
+        for resolution, modes in modes_by_resolution.items():
+            width, height = map(int, resolution.split('x'))
+            pixel_count = width * height
+            
+            # Skip small resolutions
+            if pixel_count < MIN_PIXELS:
+                continue
+                
+            resolution_scores.append((pixel_count, resolution, modes))
+        
+        # Sort by pixel count (highest first)
+        resolution_scores.sort(reverse=True)
+        
+        # Build top modes list
+        top_modes = []
+        
+        for pixel_count, resolution, modes in resolution_scores:
+            # For native resolution (highest pixel count), include more refresh rates
+            is_native = pixel_count == resolution_scores[0][0] if resolution_scores else False
+            max_rates_per_resolution = 3 if is_native else 2
+            
+            # Add best refresh rates for this resolution
+            selected_modes = modes[:max_rates_per_resolution]
+            top_modes.extend(selected_modes)
+            
+            # Stop if we've reached the limit
+            if len(top_modes) >= limit:
+                break
+        
+        return top_modes[:limit]
+
 
 def run_command(cmd: str, capture_output=True) -> Tuple[bool, str, str]:
     """Run shell command and return success status, stdout, stderr"""
@@ -194,62 +234,141 @@ def display_monitor_menu(monitors: List[Monitor]) -> Monitor:
 
 def display_refresh_rate_menu(monitor: Monitor) -> MonitorMode:
     """Display refresh rate selection menu for a monitor"""
+    show_all = False
+    
     while True:
-        print(f"\nAvailable modes for {monitor.display_name}:")
-        print("-" * 50)
+        total_modes = len(monitor.modes)
         
-        modes_by_resolution = monitor.get_modes_by_resolution()
-        all_modes = []
-        
-        # Display modes grouped by resolution
-        for resolution, modes in modes_by_resolution.items():
-            # Check if this is the native/preferred resolution (highest pixel count)
-            pixel_count = int(resolution.split('x')[0]) * int(resolution.split('x')[1])
-            is_native = pixel_count == max(
-                int(res.split('x')[0]) * int(res.split('x')[1]) 
-                for res in modes_by_resolution.keys()
+        if show_all:
+            print(f"\nAll available modes for {monitor.display_name} ({total_modes} total):")
+            print("-" * 60)
+            modes_to_show = monitor.modes
+            # Group by resolution for display
+            modes_by_resolution = monitor.get_modes_by_resolution()
+            display_modes = []
+            
+            # Display modes grouped by resolution
+            for resolution, modes in modes_by_resolution.items():
+                # Check if this is the native/preferred resolution (highest pixel count)
+                pixel_count = int(resolution.split('x')[0]) * int(resolution.split('x')[1])
+                is_native = pixel_count == max(
+                    int(res.split('x')[0]) * int(res.split('x')[1]) 
+                    for res in modes_by_resolution.keys()
+                )
+                
+                resolution_label = f"{resolution}"
+                if is_native:
+                    resolution_label += " (Native)"
+                
+                print(f"\n{resolution_label}:")
+                
+                for mode in modes:
+                    display_modes.append(mode)
+                    index = len(display_modes)
+                    
+                    # Mark current mode and highest refresh rate
+                    markers = []
+                    if monitor.current_mode and mode.mode_string == monitor.current_mode.mode_string:
+                        markers.append("✓ Current")
+                    if mode == modes[0]:  # First in sorted list = highest refresh rate
+                        markers.append("⭐ Maximum")
+                    
+                    marker_text = f" ({', '.join(markers)})" if markers else ""
+                    print(f"  [{index}] {mode.refresh_rate} Hz{marker_text}")
+            
+            all_modes = display_modes
+        else:
+            print(f"\nTop 10 recommended modes for {monitor.display_name}:")
+            print("-" * 60)
+            
+            top_modes = monitor.get_top_modes(limit=10)
+            all_modes = top_modes
+            
+            if not top_modes:
+                print("No suitable modes found.")
+                return None
+            
+            # Group top modes by resolution for display
+            top_by_resolution = {}
+            for mode in top_modes:
+                if mode.resolution not in top_by_resolution:
+                    top_by_resolution[mode.resolution] = []
+                top_by_resolution[mode.resolution].append(mode)
+            
+            # Sort resolutions by pixel count (descending)
+            sorted_resolutions = sorted(
+                top_by_resolution.keys(),
+                key=lambda res: int(res.split('x')[0]) * int(res.split('x')[1]),
+                reverse=True
             )
             
-            resolution_label = f"{resolution}"
-            if is_native:
-                resolution_label += " (Native)"
-            
-            print(f"\n{resolution_label}:")
-            
-            for mode in modes:
-                all_modes.append(mode)
-                index = len(all_modes)
+            index = 0
+            for resolution in sorted_resolutions:
+                modes = top_by_resolution[resolution]
                 
-                # Mark current mode and highest refresh rate
-                markers = []
-                if monitor.current_mode and mode.mode_string == monitor.current_mode.mode_string:
-                    markers.append("✓ Current")
-                if mode == modes[0]:  # First in sorted list = highest refresh rate
-                    markers.append("⭐ Maximum")
+                # Check if this is the native resolution
+                pixel_count = int(resolution.split('x')[0]) * int(resolution.split('x')[1])
+                max_pixels = max(
+                    int(res.split('x')[0]) * int(res.split('x')[1])
+                    for res in top_by_resolution.keys()
+                )
+                is_native = pixel_count == max_pixels
                 
-                marker_text = f" ({', '.join(markers)})" if markers else ""
-                print(f"  [{index}] {mode.refresh_rate} Hz{marker_text}")
+                resolution_label = f"{resolution}"
+                if is_native:
+                    resolution_label += " (Native)"
+                
+                print(f"\n{resolution_label}:")
+                
+                for mode in modes:
+                    index += 1
+                    
+                    # Mark current mode and maximum refresh rate for this resolution
+                    markers = []
+                    if monitor.current_mode and mode.mode_string == monitor.current_mode.mode_string:
+                        markers.append("✓ Current")
+                    
+                    # Check if this is the maximum refresh rate for this resolution
+                    all_modes_for_res = [m for m in monitor.modes if m.resolution == resolution]
+                    max_refresh_for_res = max(float(m.refresh_rate) for m in all_modes_for_res)
+                    if float(mode.refresh_rate) == max_refresh_for_res:
+                        markers.append("⭐ Maximum")
+                    
+                    marker_text = f" ({', '.join(markers)})" if markers else ""
+                    print(f"  [{index}] {mode.refresh_rate} Hz{marker_text}")
         
-        print(f"\n[B] Back to monitor selection")
+        # Show menu options
+        print(f"\n[A] Show all {total_modes} modes" if not show_all else f"[T] Show top 10 recommended modes")
+        print(f"[B] Back to monitor selection")
         print(f"[Q] Quit")
         print()
         
-        choice = input(f"Select mode [1-{len(all_modes)}], B to go back, or Q to quit: ").strip().upper()
+        prompt = f"Select mode [1-{len(all_modes)}]"
+        prompt += ", A for all modes" if not show_all else ", T for top modes"
+        prompt += ", B to go back, or Q to quit: "
+        
+        choice = input(prompt).strip().upper()
         
         if choice == 'Q':
             print("Exiting...")
             sys.exit(0)
         elif choice == 'B':
             return None
+        elif choice == 'A' and not show_all:
+            show_all = True
+            continue
+        elif choice == 'T' and show_all:
+            show_all = False
+            continue
         
         try:
             mode_idx = int(choice) - 1
             if 0 <= mode_idx < len(all_modes):
                 return all_modes[mode_idx]
             else:
-                print(f"❌ Invalid selection. Please enter 1-{len(all_modes)}, B, or Q.\n")
+                print(f"❌ Invalid selection. Please enter 1-{len(all_modes)}, A/T, B, or Q.\n")
         except ValueError:
-            print(f"❌ Invalid input. Please enter a number 1-{len(all_modes)}, B, or Q.\n")
+            print(f"❌ Invalid input. Please enter a number 1-{len(all_modes)}, A/T, B, or Q.\n")
 
 
 def confirm_switch(monitor: Monitor, mode: MonitorMode) -> bool:
