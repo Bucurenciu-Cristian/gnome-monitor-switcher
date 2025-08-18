@@ -89,8 +89,8 @@ def parse_current_modes(config_output: str) -> dict:
     current_monitor = None
     
     for line in config_output.split('\n'):
-        # Monitor header: "├──Monitor DP-2 (ASUSTek COMPUTER INC 34")"
-        monitor_match = re.search(r'├──Monitor\s+(\S+)\s+\((.+?)\)', line)
+        # Monitor header: "├──Monitor DP-2 (...)" or "└──Monitor eDP-1 (...)"
+        monitor_match = re.search(r'[├└]──Monitor\s+(\S+)\s+\((.+?)\)', line)
         if monitor_match:
             current_monitor = monitor_match.group(1)
         
@@ -110,8 +110,8 @@ def parse_monitors(gdctl_output: str) -> List[Monitor]:
     current_monitor = None
     
     for line in gdctl_output.split('\n'):
-        # Monitor header: "├──Monitor DP-2 (ASUSTek COMPUTER INC 34")"
-        monitor_match = re.search(r'├──Monitor\s+(\S+)\s+\((.+?)\)', line)
+        # Monitor header: "├──Monitor DP-2 (...)" or "└──Monitor eDP-1 (...)"
+        monitor_match = re.search(r'[├└]──Monitor\s+(\S+)\s+\((.+?)\)', line)
         if monitor_match:
             monitor_id = monitor_match.group(1)
             monitor_name = monitor_match.group(2)
@@ -126,9 +126,10 @@ def parse_monitors(gdctl_output: str) -> List[Monitor]:
         elif '├──Product:' in line and current_monitor:
             current_monitor.product = line.split('Product:')[1].strip()
             
-        # Mode: "│      ├──3440x1440@100.006"
-        elif re.match(r'│\s+├──\d+x\d+@\d+\.\d+', line) and current_monitor:
-            mode_text = line.split('├──')[1].strip()
+        # Mode: "│      ├──3440x1440@100.006" or "       ├──2880x1920@120.000"
+        elif re.match(r'\s+[├└]──\d+x\d+@\d+\.\d+', line) and current_monitor:
+            # Handle both ├── and └── prefixes
+            mode_text = line.split('├──')[1].strip() if '├──' in line else line.split('└──')[1].strip()
             if '@' in mode_text:
                 resolution, refresh = mode_text.split('@')
                 current_monitor.modes.append(MonitorMode(resolution, refresh))
