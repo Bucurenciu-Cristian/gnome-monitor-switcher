@@ -16,6 +16,7 @@
 # Monitor switching aliases (INSTANT with gdctl)
 alias m0='~/bin/monitors/gdctl-instant.py DP-2'       # ASUS 34" UltraWide (3440x1440@100Hz)
 alias m1='~/bin/monitors/gdctl-instant.py DP-4'       # Iiyama 34" UltraWide (3440x1440@180Hz)
+alias m2='~/bin/monitors/gdctl-instant.py dual'       # Dual: Laptop + Portable Monitor (travel mode)
 alias m3='~/bin/monitors/gdctl-instant.py triple'     # Custom triple monitor layout
 
 # Information and utility aliases
@@ -28,6 +29,7 @@ alias mshow='~/bin/monitors/gdctl-instant.py show'            # Show current con
 # 
 # m0          # Switch to ASUS monitor (100Hz) - perfect for productivity
 # m1          # Switch to Iiyama monitor (180Hz) - perfect for gaming  
+# m2          # Switch to dual monitor - laptop (left) + portable (right) for travel
 # m3          # Switch to triple monitor layout - maximum screen real estate
 # mavailable  # Check which monitors are connected
 # mshow       # Display current monitor configuration

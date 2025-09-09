@@ -76,7 +76,7 @@ def get_connected_monitors():
 
 
 def backup_config():
-    """Save current configuration to backup"""
+    """Save current configuration to backup and cleanup old backups"""
     backup_dir = Path.home() / "bin" / "monitors" / "configs"
     backup_dir.mkdir(parents=True, exist_ok=True)
     
@@ -87,6 +87,15 @@ def backup_config():
         with open(backup_file, 'w') as f:
             f.write(output)
         print(f"✓ Configuration backed up to: {backup_file}")
+        
+        # Cleanup old backups - keep only 5 most recent
+        backup_files = sorted(backup_dir.glob("gdctl-backup-*.txt"), 
+                            key=lambda x: x.stat().st_mtime, reverse=True)
+        if len(backup_files) > 5:
+            for old_backup in backup_files[5:]:
+                old_backup.unlink()
+                print(f"  Cleaned up old backup: {old_backup.name}")
+        
         return str(backup_file)
     return None
 
@@ -200,6 +209,99 @@ def show_available_monitors():
     if {'DP-2', 'DP-3', 'DP-4'}.issubset(connected_monitors):
         print(f"  triple - Custom triple monitor layout")
 
+def setup_dual_monitor():
+    """Setup dual monitor for portable/travel use - laptop + any external monitor"""
+    print("🔄 Setting up dual monitor configuration (portable mode)...")
+    print("   Layout: Laptop (left) | External Monitor (right)")
+    
+    # Check if laptop display is connected
+    connected_monitors = get_connected_monitors()
+    
+    if 'eDP-1' not in connected_monitors:
+        print("❌ Laptop display (eDP-1) not detected!")
+        return False
+    
+    # Find any available external monitor (prioritize DP-3 for ARZOPA, but accept any)
+    external_monitor = None
+    actual_name = "External Monitor"
+    
+    # Check what's actually connected and get its real info
+    success, output, _ = run_command("gdctl show")
+    
+    for monitor_id in ['DP-3', 'DP-4', 'DP-2']:  # Prioritize DP-3 for portable ARZOPA
+        if monitor_id in connected_monitors:
+            external_monitor = monitor_id
+            # Extract actual monitor name from gdctl output
+            if monitor_id in output:
+                lines = output.split('\n')
+                for line in lines:
+                    if f"Monitor {monitor_id}" in line:
+                        # Extract manufacturer and model from the line
+                        import re
+                        match = re.search(r'Monitor ' + monitor_id + r' \((.*?)\)', line)
+                        if match:
+                            actual_name = match.group(1)
+                            print(f"   Detected: {actual_name} on {monitor_id}")
+                            break
+            break
+    
+    if not external_monitor:
+        print("❌ No external monitor detected!")
+        print(f"   This mode is for portable/travel setup with external monitor")
+        print(f"   Connected monitors: {', '.join(sorted(connected_monitors))}")
+        return False
+    
+    print(f"   Using: Laptop (eDP-1) + External ({external_monitor})")
+    
+    # Backup current config
+    backup_config()
+    
+    # Determine the best mode for the external monitor at 60Hz
+    # For DP-3 when it's ARZOPA portable: use 1920x1080@60.000
+    # For other monitors: use their preferred mode at 60Hz if available
+    if external_monitor == 'DP-3':
+        # Could be ARZOPA portable or LG - try 1920x1080 first (common for portable monitors)
+        external_mode = "1920x1080@60.000"
+    elif external_monitor == 'DP-4':
+        external_mode = "3440x1440@59.973"  # Iiyama at 60Hz
+    elif external_monitor == 'DP-2':
+        external_mode = "3440x1440@59.973"  # ASUS at 60Hz
+    else:
+        external_mode = "1920x1080@60.000"  # Safe default
+    
+    # Calculate position for external monitor based on scaled laptop width
+    # Based on current working config: eDP-1 at scale 1.75 uses logical width of 1644
+    external_x = 1644
+    
+    # Build the gdctl command
+    cmd = f"""gdctl set --verbose \\
+        --logical-monitor --monitor eDP-1 --mode 2880x1920@60.000 --scale 1.75 --x 0 --y 0 \\
+        --logical-monitor --primary --monitor {external_monitor} --mode {external_mode} --x {external_x} --y 0"""
+    
+    success, output, error = run_command(cmd, show_output=True)
+    
+    if success:
+        print("✅ Dual monitor configuration applied!")
+        print("📺 Monitor Details:")
+        print("   • Laptop (eDP-1): Left side, 2880x1920@60Hz, 175% scale")
+        print(f"   • External ({external_monitor}): Right side, {external_mode}")
+        print("🚀 Perfect for portable productivity!")
+    else:
+        print(f"❌ Failed to setup dual monitor: {error}")
+        # Try fallback with different resolution if it failed
+        if "mode" in str(error).lower() and external_monitor == 'DP-3':
+            print("🔄 Retrying with alternative resolution...")
+            external_mode = "2560x1080@60.000"  # Try LG resolution
+            cmd = f"""gdctl set --verbose \\
+                --logical-monitor --monitor eDP-1 --mode 2880x1920@60.000 --scale 1.75 --x 0 --y 0 \\
+                --logical-monitor --primary --monitor {external_monitor} --mode {external_mode} --x 1644 --y 0"""
+            success, output, error = run_command(cmd, show_output=True)
+            if success:
+                print("✅ Dual monitor configuration applied with alternative resolution!")
+                return True
+    
+    return success
+
 def restore_triple_monitor():
     """Restore custom triple monitor configuration with optimal layout and refresh rates"""
     print("🔄 Restoring custom triple monitor setup...")
@@ -230,8 +332,8 @@ def restore_triple_monitor():
     # Create custom triple monitor configuration with maximum refresh rates
     cmd = """gdctl set --verbose \\
         --logical-monitor --monitor DP-3 --mode 2560x1080@60.000 --transform 270 --x 0 --y 0 \\
-        --logical-monitor --primary --monitor DP-4 --mode 3440x1440@179.981 --x 1080 --y 0 \\
-        --logical-monitor --monitor DP-2 --mode 3440x1440@100.006 --x 1080 --y 1440"""
+        --logical-monitor --monitor DP-4 --mode 3440x1440@179.981 --x 1080 --y 0 \\
+        --logical-monitor --primary --monitor DP-2 --mode 3440x1440@100.006 --x 1080 --y 1440"""
     
     success, output, error = run_command(cmd, show_output=True)
     
@@ -239,8 +341,8 @@ def restore_triple_monitor():
         print("✅ Custom triple monitor configuration applied!")
         print("📺 Monitor Details:")
         print("   • LG (DP-3): Portrait Left, 2560x1080@60Hz")
-        print("   • Iiyama (DP-4): Primary, 3440x1440@180Hz")
-        print("   • ASUS (DP-2): Secondary, 3440x1440@100Hz")
+        print("   • Iiyama (DP-4): Secondary, 3440x1440@180Hz")
+        print("   • ASUS (DP-2): Primary, 3440x1440@100Hz")
         print("🚀 All monitors at maximum refresh rates!")
         
     else:
@@ -265,6 +367,7 @@ def main():
         print("  list       - List all available monitors")
         print("  available  - Show only connected monitors")
         print("  triple     - Restore triple monitor setup")
+        print("  dual       - Dual monitor (laptop + portable)")
         
         # Show current environment context
         if connected_monitors:
@@ -296,6 +399,10 @@ def main():
         show_available_monitors()
     elif command == "triple":
         success = restore_triple_monitor()
+        if not success:
+            sys.exit(1)
+    elif command == "dual":
+        success = setup_dual_monitor()
         if not success:
             sys.exit(1)
     elif command in MONITORS:
